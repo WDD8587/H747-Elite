@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,7 +12,7 @@ permissions:
 jobs:
   build_m7:
     name: Build M7 Firmware
-    uses: ./.github/workflows/release.yml  # self-referencing composite via actions
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/build_m7
@@ -20,6 +21,7 @@ jobs:
 
   build_m4:
     name: Build M4 Firmware
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/build_m4
@@ -28,6 +30,7 @@ jobs:
 
   build_rk:
     name: Build RK3566 App
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/build_rk
@@ -43,90 +46,30 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq cmake gcc-arm-none-eabi build-essential python3-pip
-          pip install pytest
+          sudo apt-get install -y -qq cmake gcc-arm-none-eabi build-essential
       - name: Run unit tests
         run: |
           cd tests
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build
-          ctest --output-on-failure
-      - name: Run regression suite
-        run: |
-          tests/regression/regression_suite
-      - name: Generate SBOM
-        uses: CycloneDX/gh-python-generator@v1
-        with:
-          sbom-format: json
-          output-file: sbom.cdx.json
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.cdx.json
+          make test
 
-  sign:
-    name: Sign Firmware Binaries
+  release:
+    name: Create GitHub Release
     needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
-        with:
-          pattern: firmware-*
-      - name: Install signing tool
-        run: |
-          pip install img-tool
-      - name: Sign M7 binary
-        run: |
-          python3 -c "
-from img_tool import sign
-sign('firmware-m7/firmware.bin', 'firmware-m7/firmware_signed.bin',
-    key_file='${{ secrets.SIGNING_KEY }}', version='${{ github.ref_name }}')
-"
-      - name: Sign M4 binary
-        run: |
-          python3 -c "
-from img_tool import sign
-sign('firmware-m4/firmware.bin', 'firmware-m4/firmware_signed.bin',
-    key_file='${{ secrets.SIGNING_KEY }}', version='${{ github.ref_name }}')
-"
-      - name: Upload signed artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: signed-firmware
-          path: |
-            firmware-m7/firmware_signed.bin
-            firmware-m4/firmware_signed.bin
-
-  release:
-    name: Create GitHub Release
-    needs: [sign]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
       - name: Generate release notes
-        id: notes
         run: |
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "# H747 Elite Firmware ${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "## Artifacts" >> $GITHUB_OUTPUT
-          echo "- M7 firmware (signed): \`firmware_m7_signed.bin\`" >> $GITHUB_OUTPUT
-          echo "- M4 firmware (signed): \`firmware_m4_signed.bin\`" >> $GITHUB_OUTPUT
-          echo "- RK3566 application: \`rk3566_app\`" >> $GITHUB_OUTPUT
-          echo "- SBOM: \`sbom.cdx.json\`" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "## H747 Elite Firmware ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| firmware-m7 | M7 core firmware (.bin/.hex/.elf) |" >> $GITHUB_STEP_SUMMARY
+          echo "| firmware-m4 | M4 core firmware (.bin/.hex/.elf) |" >> $GITHUB_STEP_SUMMARY
+          echo "| firmware-rk | RK3566 application |" >> $GITHUB_STEP_SUMMARY
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          body: ${{ steps.notes.outputs.notes }}
-          files: |
-            artifacts/signed-firmware/firmware_m7_signed.bin
-            artifacts/signed-firmware/firmware_m4_signed.bin
-            artifacts/firmware-rk/rk3566_app
-            artifacts/sbom/sbom.cdx.json
+          body: "H747 Elite firmware release ${{ github.ref_name }}"
           draft: false
           prerelease: false

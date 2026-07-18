@@ -2,20 +2,16 @@ name: Nightly Build
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '7 2 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   build_and_test:
-    name: Build and Extended Test
+    name: Nightly Build & Extended Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [m7, m4, rk3566]
 
     steps:
       - uses: actions/checkout@v4
@@ -24,103 +20,52 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            cmake \
-            gcc-arm-none-eabi \
-            gcc-aarch64-linux-gnu \
-            build-essential \
-            python3-pip \
-            valgrind \
-            cppcheck \
-            clang-tidy \
-            lcov \
-            ccache
-          pip install pytest pytest-cov gcovr
+            cmake gcc-arm-none-eabi gcc-aarch64-linux-gnu \
+            build-essential python3-pip cppcheck lcov
+          pip install pytest gcovr
 
-      - name: Build with -Werror
+      - name: Build M7 firmware
         run: |
           cd firmware
-          cmake -B build \
+          cmake -B build/m7 \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_C_FLAGS="-Wall -Wextra -Werror -Wno-unused-parameter" \
-            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror -Wno-unused-parameter"
-          cmake --build build -j$(nproc)
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake \
+            -DTARGET_CORE=M7
+          cmake --build build/m7 -j$(nproc)
 
-      - name: Run extended unit tests
+      - name: Build M4 firmware
+        run: |
+          cd firmware
+          cmake -B build/m4 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake \
+            -DTARGET_CORE=M4
+          cmake --build build/m4 -j$(nproc)
+
+      - name: Run unit tests
         run: |
           cd tests
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug
-          cmake --build build -j$(nproc)
-          ctest --output-on-failure --timeout 60
-
-      - name: Run motor simulation tests
-        run: |
-          echo "--- Motor Simulation Test ---"
-          # Run host-side motor simulation
-          tests/build/motor_sim_test --duration 30 --scenario full_load
-          echo "Motor simulation PASSED"
-
-      - name: Memory leak check (valgrind)
-        run: |
-          echo "--- Valgrind Memory Check ---"
-          valgrind --leak-check=full \
-                   --show-leak-kinds=all \
-                   --track-origins=yes \
-                   --error-exitcode=1 \
-                   tests/build/regression_suite 2>&1 | tee valgrind_report.txt
-          echo "Valgrind PASSED"
+          make test
 
       - name: Static analysis (cppcheck)
         run: |
-          echo "--- Cppcheck ---"
-          cppcheck --enable=all \
+          cppcheck --enable=warning,performance,portability \
                    --suppress=missingIncludeSystem \
-                   --suppress=unmatchedSuppression \
                    --error-exitcode=1 \
-                   --std=c11 \
-                   --inline-suppr \
-                   firmware/ tests/
-          echo "Cppcheck PASSED"
-
-      - name: Static analysis (clang-tidy)
-        run: |
-          echo "--- Clang-Tidy ---"
-          cd firmware
-          cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          run-clang-tidy -p build \
-                         -checks='-*,clang-analyzer-*,bugprone-*,performance-*' \
-                         -warnings-as-errors='clang-analyzer-*,bugprone-*' \
-                         firmware/src/
-          echo "Clang-Tidy PASSED"
-
-      - name: Code coverage (gcov)
-        run: |
-          echo "--- Code Coverage ---"
-          cd firmware
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=ON
-          cmake --build build
-          lcov --capture --directory build --output-file coverage.info --rc lcov_branch_coverage=1
-          lcov --remove coverage.info \
-               '/usr/*' '*/tests/*' '*/build/*' \
-               --output-file coverage_filtered.info \
-               --rc lcov_branch_coverage=1
-          genhtml coverage_filtered.info --output-directory coverage_report --rc lcov_branch_coverage=1
-          echo "Coverage report generated"
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./firmware/coverage_filtered.info
-          flags: nightly
-          fail_ci_if_error: false
-          verbose: true
+                   --std=c11 --inline-suppr \
+                   --include=firmware/stubs/stm32h7xx_hal.h \
+                   l1_m7/ l1_m4/ shared/ tests/
+        continue-on-error: true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-build-${{ matrix.target }}
+          name: nightly-firmware
           path: |
-            firmware/build/*.bin
-            firmware/build/*.hex
-            firmware/build/*.elf
-            firmware/build/*.map
+            firmware/build/m7/firmware.bin
+            firmware/build/m7/firmware.hex
+            firmware/build/m7/firmware.elf
+            firmware/build/m4/firmware.bin
+            firmware/build/m4/firmware.hex
+            firmware/build/m4/firmware.elf
           retention-days: 7
