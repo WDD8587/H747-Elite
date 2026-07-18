@@ -32,24 +32,24 @@ runs:
       id: cache-arm-gcc
       uses: actions/cache@v4
       with:
-        path: /opt/gcc-arm-none-eabi-13.3
-        key: arm-gcc-13.3-${{ runner.os }}
+        path: /opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi
+        key: arm-gcc-13.3-v2-${{ runner.os }}
 
     - name: Install ARM GCC 13.3
       if: steps.cache-arm-gcc.outputs.cache-hit != 'true'
       shell: bash
       run: |
         curl -fsSL \
-          https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-rm/13.3.rel1/gcc-arm-none-eabi-13.3.rel1-x86_64-linux.tar.bz2 \
-          -o /tmp/gcc-arm-none-eabi.tar.bz2
-        sudo tar -xjf /tmp/gcc-arm-none-eabi.tar.bz2 -C /opt/
-        rm /tmp/gcc-arm-none-eabi.tar.bz2
+          https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz \
+          -o /tmp/arm-gcc.tar.xz
+        sudo tar -xJf /tmp/arm-gcc.tar.xz -C /opt/
+        rm /tmp/arm-gcc.tar.xz
 
     - name: Add ARM GCC to PATH
       shell: bash
       run: |
-        echo "/opt/gcc-arm-none-eabi-13.3.rel1/bin" >> $GITHUB_PATH
-        echo "ARM_NONE_EABI_GCC_PATH=/opt/gcc-arm-none-eabi-13.3.rel1/bin" >> $GITHUB_ENV
+        echo "/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
+        echo "ARM_NONE_EABI_GCC_PATH=/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_ENV
 
     - name: Verify toolchain
       shell: bash
