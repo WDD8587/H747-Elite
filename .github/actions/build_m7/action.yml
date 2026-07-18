@@ -28,49 +28,17 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Cache ARM GCC toolchain
-      id: cache-arm-gcc
-      uses: actions/cache@v4
-      with:
-        path: /opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi
-        key: arm-gcc-13.3-v2-${{ runner.os }}
-
-    - name: Install ARM GCC 13.3
-      if: steps.cache-arm-gcc.outputs.cache-hit != 'true'
+    - name: Install ARM GCC
       shell: bash
       run: |
-        curl -fsSL \
-          https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz \
-          -o /tmp/arm-gcc.tar.xz
-        sudo tar -xJf /tmp/arm-gcc.tar.xz -C /opt/
-        rm /tmp/arm-gcc.tar.xz
-
-    - name: Add ARM GCC to PATH
-      shell: bash
-      run: |
-        echo "/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
-        echo "ARM_NONE_EABI_GCC_PATH=/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_ENV
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq gcc-arm-none-eabi binutils-arm-none-eabi
 
     - name: Verify toolchain
       shell: bash
       run: |
         arm-none-eabi-gcc --version
         arm-none-eabi-g++ --version
-
-    - name: Setup ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        key: m7-${{ inputs.build_type }}
-        variant: ccache
-
-    - name: Configure ccache for ARM cross-compiler
-      shell: bash
-      run: |
-        ccache --set-config=cache_dir=/home/runner/.ccache
-        ccache --set-config=max_size=500M
-        ccache --set-config=compiler_type=other
-        sudo ln -sf /usr/bin/ccache /usr/local/bin/arm-none-eabi-gcc
-        sudo ln -sf /usr/bin/ccache /usr/local/bin/arm-none-eabi-g++
 
     - name: Configure CMake (M7)
       shell: bash
@@ -80,8 +48,6 @@ runs:
           -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake \
           -DTARGET_CORE=M7 \
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           ${{ inputs.extra_cmake_args }}
 
     - name: Build M7 firmware
@@ -89,10 +55,6 @@ runs:
       run: |
         cd firmware
         cmake --build build/m7 -j$(nproc)
-
-    - name: Show ccache statistics
-      shell: bash
-      run: ccache --show-stats
 
     - name: List build outputs
       shell: bash

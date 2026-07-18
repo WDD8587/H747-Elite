@@ -28,28 +28,11 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Cache ARM GCC toolchain
-      id: cache-arm-gcc
-      uses: actions/cache@v4
-      with:
-        path: /opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi
-        key: arm-gcc-13.3-v2-${{ runner.os }}
-
-    - name: Install ARM GCC 13.3
-      if: steps.cache-arm-gcc.outputs.cache-hit != 'true'
+    - name: Install ARM GCC
       shell: bash
       run: |
-        curl -fsSL \
-          https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz \
-          -o /tmp/arm-gcc.tar.xz
-        sudo tar -xJf /tmp/arm-gcc.tar.xz -C /opt/
-        rm /tmp/arm-gcc.tar.xz
-
-    - name: Add ARM GCC to PATH
-      shell: bash
-      run: |
-        echo "/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_PATH
-        echo "ARM_NONE_EABI_GCC_PATH=/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin" >> $GITHUB_ENV
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq gcc-arm-none-eabi binutils-arm-none-eabi
 
     - name: Verify toolchain
       shell: bash
