@@ -1,0 +1,139 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  build_m7:
+    name: Build M7
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build_m7
+        with:
+          build_type: Debug
+
+  build_m4:
+    name: Build M4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build_m4
+        with:
+          build_type: Debug
+
+  build_rk:
+    name: Build RK3566
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build_rk
+        with:
+          build_type: Debug
+
+  unit_tests:
+    name: Unit Tests
+    needs: [build_m7, build_m4, build_rk]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake gcc-arm-none-eabi build-essential check lcov
+
+      - name: Build and run unit tests
+        run: |
+          cd tests
+          make test
+
+  static_analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cppcheck clang-tidy clang-format cmake
+
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=warning,performance,portability \
+                   --suppress=missingIncludeSystem \
+                   --error-exitcode=1 \
+                   --std=c11 \
+                   --inline-suppr \
+                   --include=firmware/stubs/stm32h7xx_hal.h \
+                   l1_m7/ l1_m4/ shared/ tests/
+        continue-on-error: true
+
+      - name: Run clang-tidy
+        run: |
+          echo "Skipping clang-tidy (ARM target requires cross-compilation database)"
+        continue-on-error: true
+
+  code_style:
+    name: Code Style Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang-format
+
+      - name: Check code formatting
+        run: |
+          echo "Checking C/C++ files for clang-format compliance..."
+          FILES=$(find l1_m7/ l1_m4/ shared/ tests/ -name "*.c" -o -name "*.h" -o -name "*.cpp" | sort)
+          FORMAT_ERRORS=0
+          for f in $FILES; do
+            diff -u "$f" <(clang-format --style=file "$f") || \
+              { echo "Formatting error in: $f"; FORMAT_ERRORS=$((FORMAT_ERRORS + 1)); }
+          done
+          if [ $FORMAT_ERRORS -ne 0 ]; then
+            echo "::error::Found $FORMAT_ERRORS files with formatting issues."
+            echo "Run 'clang-format -i <file>' to fix."
+            exit 1
+          fi
+          echo "All files are properly formatted."
+
+  check_summary:
+    name: PR Check Summary
+    needs: [build_m7, build_m4, build_rk, unit_tests, static_analysis, code_style]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize results
+        run: |
+          echo "## PR Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| M7 Build | ${{ needs.build_m7.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| M4 Build | ${{ needs.build_m4.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RK3566 Build | ${{ needs.build_rk.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit_tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Static Analysis | ${{ needs.static_analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Style | ${{ needs.code_style.result }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for failures
+        if: |
+          needs.build_m7.result == 'failure' ||
+          needs.build_m4.result == 'failure' ||
+          needs.build_rk.result == 'failure' ||
+          needs.unit_tests.result == 'failure'
+        run: |
+          echo "::error::One or more required checks failed. PR cannot be merged."
+          exit 1

@@ -1,0 +1,38 @@
+# H747 + RK3566 Triple-Core Robot Configuration
+h747:
+  m7:
+    clock_mhz: 480
+    foc_freq_hz: 20000
+    imu_rate_hz: 1000
+    ipc_uart_baud: 3000000
+  m4:
+    clock_mhz: 240
+    safety_rate_hz: 100
+    bms_rate_hz: 10
+    tof_rate_hz: 100
+    dock_rate_hz: 10
+
+rk3566:
+  slam_rate_hz: 100
+  dwa_rate_hz: 10
+  yolo_fps: 5
+  mqtt_broker: mqtt.dreame.local
+
+foc:
+  kp_id: 0.5
+  ki_id: 10.0
+  kp_iq: 0.5
+  ki_iq: 10.0
+  kp_speed: 0.1
+  ki_speed: 2.0
+  max_current_a: 3.0
+
+wheels:
+  radius_m: 0.035
+  base_width_m: 0.15
+
+bms:
+  cells: 4
+  full_mv: 16800
+  empty_mv: 12000
+  capacity_mah: 5200

@@ -1,0 +1,114 @@
+name: 'Build M7 Firmware'
+description: 'Build STM32H747 M7 core firmware with ARM GCC toolchain'
+
+inputs:
+  build_type:
+    description: 'CMake build type (Debug or Release)'
+    required: true
+    default: 'Release'
+  extra_cmake_args:
+    description: 'Extra CMake arguments'
+    required: false
+    default: ''
+
+outputs:
+  firmware_bin:
+    description: 'Path to the built M7 binary'
+    value: 'firmware/build/m7/firmware.bin'
+  firmware_hex:
+    description: 'Path to the built M7 hex'
+    value: 'firmware/build/m7/firmware.hex'
+  firmware_elf:
+    description: 'Path to the built M7 ELF'
+    value: 'firmware/build/m7/firmware.elf'
+  firmware_map:
+    description: 'Path to the build map file'
+    value: 'firmware/build/m7/firmware.map'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache ARM GCC toolchain
+      id: cache-arm-gcc
+      uses: actions/cache@v4
+      with:
+        path: /opt/gcc-arm-none-eabi-13.3
+        key: arm-gcc-13.3-${{ runner.os }}
+
+    - name: Install ARM GCC 13.3
+      if: steps.cache-arm-gcc.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -fsSL \
+          https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu-rm/13.3.rel1/gcc-arm-none-eabi-13.3.rel1-x86_64-linux.tar.bz2 \
+          -o /tmp/gcc-arm-none-eabi.tar.bz2
+        sudo tar -xjf /tmp/gcc-arm-none-eabi.tar.bz2 -C /opt/
+        rm /tmp/gcc-arm-none-eabi.tar.bz2
+
+    - name: Add ARM GCC to PATH
+      shell: bash
+      run: |
+        echo "/opt/gcc-arm-none-eabi-13.3.rel1/bin" >> $GITHUB_PATH
+        echo "ARM_NONE_EABI_GCC_PATH=/opt/gcc-arm-none-eabi-13.3.rel1/bin" >> $GITHUB_ENV
+
+    - name: Verify toolchain
+      shell: bash
+      run: |
+        arm-none-eabi-gcc --version
+        arm-none-eabi-g++ --version
+
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: m7-${{ inputs.build_type }}
+        variant: ccache
+
+    - name: Configure ccache for ARM cross-compiler
+      shell: bash
+      run: |
+        ccache --set-config=cache_dir=/home/runner/.ccache
+        ccache --set-config=max_size=500M
+        ccache --set-config=compiler_type=other
+        # Wrap ARM GCC with ccache
+        sudo ln -sf /usr/bin/ccache /usr/local/bin/arm-none-eabi-gcc
+        sudo ln -sf /usr/bin/ccache /usr/local/bin/arm-none-eabi-g++
+
+    - name: Configure CMake (M7)
+      shell: bash
+      run: |
+        cd firmware
+        cmake -B build/m7 \
+          -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
+          -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake \
+          -DTARGET_CORE=M7 \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          ${{ inputs.extra_cmake_args }}
+
+    - name: Build M7 firmware
+      shell: bash
+      run: |
+        cd firmware
+        cmake --build build/m7 -j$(nproc)
+
+    - name: Show ccache statistics
+      shell: bash
+      run: ccache --show-stats
+
+    - name: List build outputs
+      shell: bash
+      run: |
+        ls -lh firmware/build/m7/
+        echo "=== Build artifacts ==="
+        find firmware/build/m7 -name "*.bin" -o -name "*.hex" -o -name "*.elf" -o -name "*.map" | sort
+
+    - name: Upload firmware artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware-m7
+        path: |
+          firmware/build/m7/firmware.bin
+          firmware/build/m7/firmware.hex
+          firmware/build/m7/firmware.elf
+          firmware/build/m7/firmware.map
+        if-no-files-found: error

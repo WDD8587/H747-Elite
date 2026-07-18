@@ -1,0 +1,74 @@
+name: 'Build RK3566 App'
+description: 'Cross-compile the RK3566 application using aarch64-linux-gnu-gcc'
+
+inputs:
+  build_type:
+    description: 'CMake build type (Debug or Release)'
+    required: true
+    default: 'Release'
+  extra_cmake_args:
+    description: 'Extra CMake arguments'
+    required: false
+    default: ''
+
+outputs:
+  binary:
+    description: 'Path to the built RK3566 binary'
+    value: 'firmware/build/rk3566/rk3566_app'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install aarch64 cross-compiler
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          cmake \
+          build-essential
+
+    - name: Verify cross-compiler
+      shell: bash
+      run: |
+        aarch64-linux-gnu-gcc --version
+        aarch64-linux-gnu-g++ --version
+        echo "CC: $(which aarch64-linux-gnu-gcc)"
+
+    - name: Configure CMake (RK3566)
+      shell: bash
+      run: |
+        cd firmware
+        cmake -B build/rk3566 \
+          -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
+          -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_aarch64_linux_gnu.cmake \
+          -DTARGET_PLATFORM=RK3566 \
+          ${{ inputs.extra_cmake_args }}
+
+    - name: Build RK3566 application
+      shell: bash
+      run: |
+        cd firmware
+        cmake --build build/rk3566 -j$(nproc)
+
+    - name: List build outputs
+      shell: bash
+      run: |
+        ls -lh firmware/build/rk3566/
+        file firmware/build/rk3566/rk3566_app
+
+    - name: Strip debug symbols for Release
+      if: inputs.build_type == 'Release'
+      shell: bash
+      run: |
+        aarch64-linux-gnu-strip firmware/build/rk3566/rk3566_app
+        echo "=== Stripped binary size ==="
+        ls -lh firmware/build/rk3566/rk3566_app
+
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware-rk
+        path: firmware/build/rk3566/rk3566_app
+        if-no-files-found: error

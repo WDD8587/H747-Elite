@@ -1,0 +1,126 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    reviewers:
+      - "team-firmware"
+    groups:
+      actions-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "submodule"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    allow:
+      - dependency-name: "FreeRTOS"
+        dependency-type: "production"
+      - dependency-name: "STM32H7xx_HAL_Driver"
+        dependency-type: "production"
+      - dependency-name: "CMSIS"
+        dependency-type: "production"
+    reviewers:
+      - "team-firmware"
+
+  - package-ecosystem: "pip"
+    directory: "/tests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "docker"
+    directory: "/firmware"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "submodule"
+    reviewers:
+      - "team-platform"
+    open-pull-requests-limit: 10
+    allow:
+      - dependency-name: "ARM-GCC"
+      - dependency-name: "CMake"
+      - dependency-name: "FreeRTOS"
+    ignore:
+      - dependency-name: "ARM-GCC"
+        update-types: ["version-update:semver-major"]
+    groups:
+      submodule-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      submodule-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+
+  - package-ecosystem: "gitsubmodule"
+    directory: "/external/FreeRTOS"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "freertos"
+    reviewers:
+      - "team-firmware"
+    rebase-strategy: "auto"
+    auto-merge:
+      - match-update-type: "patch"
+      - match:
+          dependency-type: "production"
+          update-type: "semver-patch"

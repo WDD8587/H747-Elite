@@ -1,0 +1,167 @@
+name: End-to-End Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      firmware_version:
+        description: 'Firmware version tag to deploy (e.g., v1.2.3)'
+        required: false
+        default: ''
+      run_advanced:
+        description: 'Run advanced test scenarios'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday 6am UTC
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_and_test:
+    name: E2E Test on Hardware
+    runs-on: [self-hosted, dut]
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake gcc-arm-none-eabi openocd python3-pip \
+            libusb-1.0-0-dev
+          pip install pyserial pytest pyyaml
+
+      - name: Download firmware artifacts
+        if: inputs.firmware_version != ''
+        run: |
+          gh release download ${{ inputs.firmware_version }} \
+            --pattern '*.bin' \
+            --dir /tmp/firmware/
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build firmware from source
+        if: inputs.firmware_version == ''
+        run: |
+          cd firmware
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j$(nproc)
+          cp build/m7/firmware.bin /tmp/firmware/m7_firmware.bin
+          cp build/m4/firmware.bin /tmp/firmware/m4_firmware.bin
+
+      - name: Flash M7 via SWD
+        run: |
+          echo "Flashing M7 firmware via OpenOCD + ST-Link..."
+          openocd -f interface/stlink.cfg \
+                  -f target/stm32h7x.cfg \
+                  -c "init" \
+                  -c "reset halt" \
+                  -c "flash write_image erase /tmp/firmware/m7_firmware.bin 0x08010000" \
+                  -c "reset run" \
+                  -c "exit"
+          echo "M7 flash complete"
+
+      - name: Flash M4 via SWD
+        run: |
+          echo "Flashing M4 firmware via OpenOCD + ST-Link..."
+          openocd -f interface/stlink.cfg \
+                  -f target/stm32h7x.cfg \
+                  -c "init" \
+                  -c "reset halt" \
+                  -c "flash write_image erase /tmp/firmware/m4_firmware.bin 0x08100000" \
+                  -c "reset run" \
+                  -c "exit"
+          echo "M4 flash complete"
+
+      - name: Power-On Self-Test (POST)
+        run: |
+          echo "=== Power-On Self-Test ==="
+          python3 tests/e2e/post_test.py \
+            --port /dev/ttyACM0 \
+            --baud 115200 \
+            --timeout 30
+          echo "POST PASSED"
+
+      - name: Move Test - Forward 1m
+        run: |
+          echo "=== Move Test: Forward 1 meter ==="
+          python3 tests/e2e/move_test.py \
+            --port /dev/ttyACM0 \
+            --command forward \
+            --distance 1.0 \
+            --tolerance 0.05 \
+            --timeout 30
+          echo "Forward move PASSED"
+
+      - name: Move Test - Rotate 360 Degrees
+        run: |
+          echo "=== Move Test: Rotate 360 degrees ==="
+          python3 tests/e2e/move_test.py \
+            --port /dev/ttyACM0 \
+            --command rotate \
+            --angle 360.0 \
+            --tolerance 5.0 \
+            --timeout 30
+          echo "Rotation PASSED"
+
+      - name: IMU Heading Verification
+        run: |
+          echo "=== IMU Heading Test ==="
+          python3 tests/e2e/imu_test.py \
+            --port /dev/ttyACM0 \
+            --duration 10 \
+            --expected-heading 0 \
+            --tolerance 5.0
+          echo "IMU heading PASSED"
+
+      - name: ToF Wall Detection
+        run: |
+          echo "=== ToF Wall Detection Test ==="
+          python3 tests/e2e/tof_test.py \
+            --port /dev/ttyACM0 \
+            --expected-range 0.3 \
+            --tolerance 0.05
+          echo "ToF wall detection PASSED"
+
+      - name: Run Advanced Scenarios
+        if: inputs.run_advanced == true
+        run: |
+          echo "=== Advanced Test Scenarios ==="
+          python3 tests/e2e/advanced_scenarios.py \
+            --port /dev/ttyACM0 \
+            --scenarios bump,cliff,stall,low_battery \
+            --timeout 120
+          echo "Advanced scenarios PASSED"
+
+      - name: Generate Test Report
+        if: always()
+        run: |
+          cat << 'REPORT' > e2e_report.md
+          # E2E Test Report
+
+          | Test | Status |
+          |------|--------|
+          | Power-On Self-Test | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
+          | Forward Move 1m | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
+          | Rotate 360 | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
+          | IMU Heading | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
+          | ToF Detection | ${{ job.status == 'success' && 'PASS' || 'FAIL' }} |
+          REPORT
+          cat e2e_report.md
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-report
+          path: e2e_report.md
+          retention-days: 30
+
+      - name: Power off DUT on failure
+        if: failure()
+        run: |
+          echo "E2E test failed. Powering off DUT."
+          python3 tests/e2e/power_ctl.py --off

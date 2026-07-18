@@ -1,0 +1,31 @@
+# Binaries
+*.exe
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.ilk
+*.pdb
+
+# Build output
+build/
+firmware/build/
+
+# IDE / Editor
+.vs/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Large PDFs / media
+*.pdf
+
+# Credentials
+.env
+*.pem
+*.key
