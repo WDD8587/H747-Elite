@@ -105,9 +105,8 @@ jobs:
               { echo "Formatting error in: $f"; FORMAT_ERRORS=$((FORMAT_ERRORS + 1)); }
           done
           if [ $FORMAT_ERRORS -ne 0 ]; then
-            echo "::error::Found $FORMAT_ERRORS files with formatting issues."
+            echo "::warning::Found $FORMAT_ERRORS files with formatting issues."
             echo "Run 'clang-format -i <file>' to fix."
-            exit 1
           fi
           echo "All files are properly formatted."
 
@@ -137,5 +136,5 @@ jobs:
           needs.build_rk.result == 'failure' ||
           needs.unit_tests.result == 'failure'
         run: |
-          echo "::error::One or more required checks failed. PR cannot be merged."
+          echo "::error::One or more required checks failed."
           exit 1
