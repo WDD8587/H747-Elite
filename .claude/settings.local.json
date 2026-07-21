@@ -4,7 +4,8 @@
       "Bash(/mingw64/bin/gcc.exe --version)",
       "Read(//mingw64/**)",
       "Bash(powershell.exe *)",
-      "Bash(cmd.exe *)"
+      "Bash(cmd.exe *)",
+      "Bash(pip install *)"
     ]
   }
 }

@@ -7,6 +7,9 @@ if(NOT DEFINED TARGET_CORE)
     message(STATUS "TARGET_CORE not set, defaulting to M7")
 endif()
 
+# ---- FreeRTOS kernel path ----
+set(FREERTOS_KERNEL ${CMAKE_CURRENT_SOURCE_DIR}/FreeRTOS-Kernel)
+
 if(TARGET_CORE STREQUAL "M7")
     message(STATUS "Building STM32H747 M7 firmware")
     set(CPU_FLAGS    -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16)
@@ -14,6 +17,7 @@ if(TARGET_CORE STREQUAL "M7")
     set(STARTUP_S    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/startup/startup_stm32h747xx.s)
     set(SYSCALLS_C   ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/startup/syscalls.c)
     set(CORE_DEFINE  CORE_CM7)
+    set(FREERTOS_PORT ${FREERTOS_KERNEL}/portable/GCC/ARM_CM7/r0p1)
 elseif(TARGET_CORE STREQUAL "M4")
     message(STATUS "Building STM32H747 M4 firmware")
     set(CPU_FLAGS    -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16)
@@ -21,6 +25,7 @@ elseif(TARGET_CORE STREQUAL "M4")
     set(STARTUP_S    ${CMAKE_CURRENT_SOURCE_DIR}/startup/startup_stm32h747_m4.s)
     set(SYSCALLS_C   ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/startup/syscalls.c)
     set(CORE_DEFINE  CORE_CM4)
+    set(FREERTOS_PORT ${FREERTOS_KERNEL}/portable/GCC/ARM_CM4F)
 else()
     message(FATAL_ERROR "TARGET_CORE must be M7 or M4, got: ${TARGET_CORE}")
 endif()
@@ -36,10 +41,25 @@ set(CMAKE_EXE_LINKER_FLAGS
 
 # ---- Include paths ----
 set(COMMON_INC
-    ${CMAKE_CURRENT_SOURCE_DIR}/stubs                     # HAL/FreeRTOS stubs
+    ${CMAKE_CURRENT_SOURCE_DIR}                           # FreeRTOSConfig.h
+    ${FREERTOS_KERNEL}/include                            # FreeRTOS.h, task.h, queue.h etc.
+    ${FREERTOS_PORT}                                      # portmacro.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs                     # HAL stubs (stm32h7xx_hal.h, cmsis_os.h)
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/inc             # shared/inc (ipc_proto.h, ipc_transport.h)
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Inc              # m7_config.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Inc              # m4_config.h
+)
+
+# ---- FreeRTOS kernel sources (used by both M7 and M4) ----
+set(FREERTOS_SRCS
+    ${FREERTOS_KERNEL}/tasks.c
+    ${FREERTOS_KERNEL}/queue.c
+    ${FREERTOS_KERNEL}/list.c
+    ${FREERTOS_KERNEL}/timers.c
+    ${FREERTOS_KERNEL}/event_groups.c
+    ${FREERTOS_KERNEL}/stream_buffer.c
+    ${FREERTOS_PORT}/port.c
+    ${FREERTOS_KERNEL}/portable/MemMang/heap_4.c
 )
 
 # ---- M7-specific source files ----
@@ -131,9 +151,9 @@ set(SHARED_SRCS
 
 # ---- Select sources based on core ----
 if(TARGET_CORE STREQUAL "M7")
-    set(FW_SRCS ${M7_SRCS} ${SHARED_SRCS})
+    set(FW_SRCS ${M7_SRCS} ${SHARED_SRCS} ${FREERTOS_SRCS})
 else()
-    set(FW_SRCS ${M4_SRCS} ${SHARED_SRCS})
+    set(FW_SRCS ${M4_SRCS} ${SHARED_SRCS} ${FREERTOS_SRCS})
 endif()
 
 # ---- Build executable ----
