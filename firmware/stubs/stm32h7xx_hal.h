@@ -4,10 +4,14 @@
 #ifndef STM32H7XX_HAL_STUB_H
 #define STM32H7XX_HAL_STUB_H
 
-/* CMSIS: device header before core, because core_cm7.h needs IRQn_Type */
+/* CMSIS: device header before core (IRQn_Type needed by core_cm*.h) */
 #define __FPU_PRESENT 1U
 #include "stm32h747xx.h"
-#include "core_cm7.h"
+#if defined(CORE_CM4)
+  #include "core_cm4.h"
+#else
+  #include "core_cm7.h"
+#endif
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -190,6 +194,7 @@ static inline HAL_StatusTypeDef HAL_I2C_Master_Seq_Receive(void *h, uint16_t a, 
 static inline int HAL_HSEM_IsSemTaken(int id) { (void)id; return 0; }
 static inline void HAL_HSEM_Release(int id, int p) { (void)id;(void)p; }
 static inline int HAL_HSEM_Take(int id, int p) { (void)id;(void)p; return 0; }
+static inline int HAL_HSEM_FastTake(int id) { (void)id; return 1; }
 
 /* ---- RCC clock macros ---- */
 #define RCC_OSCILLATORTYPE_HSE  0x00000001U
@@ -307,6 +312,15 @@ static inline void HAL_GPIO_Init(GPIO_TypeDef *p, GPIO_InitTypeDef *i) { (void)p
 #define DMA_MDATAALIGN_HALFWORD  DMA_PDATAALIGN_HALFWORD
 #define DMA_MEM_TO_PERIPH        DMA_MEMORY_TO_PERIPH
 #define HAL_DMA_XFER_HALFCPLT_CB_ID 0x00000002U
+
+/* ---- M4 domain compatibility ---- */
+#if defined(CORE_CM4)
+#define WWDG  WWDG1   /* M4 accesses D2 domain WWDG as WWDG1 */
+#endif
+
+/* ---- Missing TIM macros ---- */
+#define TIM_BDTR_BK  (0x1000U)  /* Break input enable (same as BKE for some channels) */
+#define GPIO_AF1_TIM1  1
 
 /* ---- CORDIC (not in ST CMSIS, STM32H7 specific) ---- */
 typedef struct {

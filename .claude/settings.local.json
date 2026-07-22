@@ -11,7 +11,10 @@
       "Bash(export PATH=\"D:/ARM_GCC/13.3 rel1/bin:$PATH\")",
       "Bash(cmake -B build/m7 -G \"Ninja\" -DCMAKE_TOOLCHAIN_FILE=\"cmake/toolchain_arm_none_eabi.cmake\" -DTARGET_CORE=M7)",
       "Bash(cmake --build build/m7)",
-      "Bash(sort -u -t: -k3)"
+      "Bash(sort -u -t: -k3)",
+      "Bash(rm -rf build/m4)",
+      "Bash(cmake -B build/m4 -G \"Ninja\" -DCMAKE_TOOLCHAIN_FILE=\"cmake/toolchain_arm_none_eabi.cmake\" -DTARGET_CORE=M4)",
+      "Bash(cmake --build build/m4)"
     ]
   }
 }

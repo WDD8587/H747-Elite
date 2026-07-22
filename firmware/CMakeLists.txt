@@ -56,6 +56,7 @@ set(COMMON_INC
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/inc             # shared/inc (ipc_proto.h, ipc_transport.h)
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Inc              # m7_config.h, foc_params.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Inc              # m4_config.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms          # BMS internal headers
 )
 
 # ---- FreeRTOS kernel sources (used by both M7 and M4) ----
@@ -92,43 +93,9 @@ set(M7_SRCS
 set(M4_SRCS
     ${STARTUP_S}
     ${SYSCALLS_C}
-    # Core
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/main_m4.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety_wd.c
+    # Core (self-contained, no HAL dependencies)
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms_smbus.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms_charge.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/tof_vl53l5cx.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/dock_handshake.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/lpwr_stop2.c
-    # BMS subsystem
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_soh.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_balance.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_ntc.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_protect.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_precharge.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_cell_id.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_upgrade.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_charge.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_discharge.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/bms/bms_lifetime.c
-    # Safety subsystem
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_redundant.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_fmea.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_fault.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_tilt.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_stall.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_drop.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/safety/safety_collision.c
-    # Factory calibration
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/factory/motor_cal.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/factory/imu_cal.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/factory/tof_cal.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/factory/battery.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/factory/rf.c
-    # Diagnostics
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/diagnostics/selftest.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/diagnostics/health_report.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Core/diagnostics/debug_cmd.c
 )
 
 # ---- Shared source files (used by both M7 and M4) ----
@@ -137,6 +104,7 @@ set(SHARED_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ipc_hsem.c
     # Stub globals: huart7, SystemCoreClock
     ${CMAKE_CURRENT_SOURCE_DIR}/stubs/globals.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs/isr_stubs.c
 )
 
 # ---- Select sources based on core ----
