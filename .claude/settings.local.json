@@ -5,7 +5,13 @@
       "Read(//mingw64/**)",
       "Bash(powershell.exe *)",
       "Bash(cmd.exe *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(rm -rf build)",
+      "Bash(mkdir -p build/m7)",
+      "Bash(export PATH=\"D:/ARM_GCC/13.3 rel1/bin:$PATH\")",
+      "Bash(cmake -B build/m7 -G \"Ninja\" -DCMAKE_TOOLCHAIN_FILE=\"cmake/toolchain_arm_none_eabi.cmake\" -DTARGET_CORE=M7)",
+      "Bash(cmake --build build/m7)",
+      "Bash(sort -u -t: -k3)"
     ]
   }
 }

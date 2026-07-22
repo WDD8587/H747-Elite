@@ -18,6 +18,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h7xx_hal.h"
+#include "foc_params.h"
 #include <string.h>
 #include <math.h>
 

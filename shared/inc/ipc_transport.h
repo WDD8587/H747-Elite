@@ -17,6 +17,7 @@ typedef struct ipc_transport {
     int  (*recv)(uint8_t *buf, uint16_t len, uint32_t timeout_ms);
     bool (*ready)(void);
     void (*process)(void);
+    void (*deinit)(void);
     ipc_transport_type_t type;
     const char *name;
 } ipc_transport_t;

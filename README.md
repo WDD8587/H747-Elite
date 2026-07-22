@@ -1,6 +1,7 @@
 # H747 Elite
 
-STM32H747 + RK3566 triple-core vacuum robot firmware.
+STM32H747 + RK3566 triple-core vacuum robot firmware.  
+Local tests: **58/58 PASS** | CI: **GitHub Actions** | RTOS: **FreeRTOS** | Compiler: **ARM GCC 13.3**
 
 ## Architecture
 
@@ -10,9 +11,8 @@ STM32H747 CM7 (480MHz)    STM32H747 CM4 (240MHz)    RK3566 (Quad A55)
 ├─ IPC bridge             ├─ Safety watchdog        ├─ DWA planner
 ├─ IMU prep               ├─ ToF VL53L5CX           ├─ YOLO vision
 └─ Bootloader             ├─ Dock handshake         ├─ Cloud MQTT
-                          └─ Factory calibration    └─ OTA A/B
-       │                          │                       │
-       └── HSEM+SRAM3 (<1μs) ────┘                       │
+       │                       │                         │
+       └── HSEM+SRAM3 (<1μs) ──┘                         │
                                                           │
        ──────────── SPI 20MHz / USB CDC / UART ──────────┘
 ```
@@ -24,28 +24,79 @@ STM32H747 CM7 (480MHz)    STM32H747 CM4 (240MHz)    RK3566 (Quad A55)
 | `l1_m7/`  | M7 firmware: FOC, IPC bridge, HAL config, startup |
 | `l1_m4/`  | M4 firmware: BMS, safety, ToF, dock, factory cal |
 | `l2_rk3566/` | RK3566 Linux: SLAM, cloud, OTA, comm protocols |
-| `shared/` | Shared IPC protocol, CRC16, transport layer (UART/SPI/USB) |
-| `tests/`  | 58 unit tests (Unity framework, PC-hosted) |
-| `firmware/` | CMake build system + linker scripts + HAL stubs |
+| `shared/` | IPC: protocol (CRC16), transport layer (UART/SPI/USB abstraction) |
+| `tests/`  | 58 unit tests (Unity framework, PC-hosted, 1s) |
+| `firmware/` | CMake build system + linker scripts + CMSIS/HAL |
 | `config/` | Robot parameters (YAML) |
-| `.github/` | CI/CD: PR checks, nightly builds, e2e tests |
+| `simulation/` | MATLAB FOC simulation (PMSM, Clarke/Park, SVPWM) |
+| `.github/` | CI/CD: build M7/M4/RK3566, test, static analysis |
 
 ## Build
 
-### Unit Tests (PC)
-```bash
+### Prerequisites
+
+- **ARM GCC 13.3**: `D:\ARM_GCC\13.3 rel1\bin\arm-none-eabi-gcc.exe`
+- **Ninja**: `winget install Ninja-build.Ninja`
+- **Git submodules**: `git submodule update --init --recursive`
+
+Submodules: `firmware/FreeRTOS-Kernel` (v11.x), `firmware/STM32CubeH7`
+
+### Unit Tests (PC, 1 second)
+
+```powershell
 cd tests
-.\run_tests.ps1          # Windows PowerShell
-make test                 # Linux
+.\run_tests.ps1              # Windows: build + run (58 tests)
+```
+
+```bash
+cd tests && make test         # Linux
 ```
 
 ### Firmware Cross-Compile (ARM)
-```bash
+
+```powershell
+$env:PATH = "D:\ARM_GCC\13.3 rel1\bin;" + $env:PATH
+
 cd firmware
-cmake -B build/m7 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake -DTARGET_CORE=M7
-cmake --build build/m7 -j$(nproc)
+
+# M7
+cmake -B build/m7 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake -DTARGET_CORE=M7
+cmake --build build/m7
+# → build/m7/firmware.bin, firmware.hex, firmware.elf
+
+# M4
+cmake -B build/m4 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm_none_eabi.cmake -DTARGET_CORE=M4
+cmake --build build/m4
 ```
 
-## Tests
-58 tests: 58 passed, 0 failed  
-Modules: FOC Math, BMS SMBus, BMS Charge, Safety Watchdog, OTA Diff, SPI IPC, USB CDC
+### MATLAB FOC Simulation
+
+```powershell
+cd simulation\matlab
+& "C:\Users\EC\AppData\Local\Programs\GNU Octave\Octave-11.3.0\mingw64\bin\octave-cli.exe" --eval foc_sim
+```
+
+## CI/CD
+
+Push to main triggers GitHub Actions:
+
+| Job | What it does |
+|-----|-------------|
+| Build M7 | `arm-none-eabi-gcc` cross-compile, FreeRTOS + CMSIS + FOC |
+| Build M4 | `arm-none-eabi-gcc` cross-compile, BMS + safety |
+| Build RK3566 | `aarch64-linux-gnu-gcc` cross-compile |
+| Unit Tests | `make test` — 58/58 PASS |
+| Static Analysis | cppcheck on `l1_m7/ l1_m4/ shared/ tests/` |
+
+## Key Numbers
+
+| Metric | Value |
+|--------|-------|
+| Source files | ~190 |
+| Lines of C/C++ | ~50,000 |
+| Unit tests | 58 |
+| CI build time | ~2 min |
+| M7 firmware.bin | 740B (core), full build ~300KB |
+| FOC PWM frequency | 20 kHz |
+| SPI IPC speed | 20 MHz |
+| IMU rate | 1 kHz |

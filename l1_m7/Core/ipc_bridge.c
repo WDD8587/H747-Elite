@@ -54,7 +54,7 @@ static const uint16_t crc16_tbl[256] = {
     0x8201,0x42C0,0x4380,0x8341,0x4100,0x81C1,0x8081,0x4040
 };
 
-static uint16_t crc16_ibm(const uint8_t *data, uint16_t len)
+uint16_t crc16_ibm(const uint8_t *data, uint16_t len)
 {
     uint16_t crc = 0xFFFF;
     while (len--) crc = (crc >> 8) ^ crc16_tbl[(crc ^ *data++) & 0xFF];

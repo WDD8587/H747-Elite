@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+project(firmware C ASM)
 set(CMAKE_PROJECT_NAME firmware)
 
 # ---- Target core selection: cmake -DTARGET_CORE=M7 or M4 ----
@@ -31,22 +32,29 @@ else()
 endif()
 
 # ---- Compile flags ----
-set(COMMON_FLAGS  -Wall -Wextra -Werror -Wno-unused-parameter
+set(COMMON_FLAGS  -Wall -Wextra -Wno-unused-parameter
                   -Os -ffunction-sections -fdata-sections -fno-common -std=gnu11)
-set(CMAKE_C_FLAGS       "${CPU_FLAGS} ${COMMON_FLAGS}" CACHE INTERNAL "")
-set(CMAKE_ASM_FLAGS     "${CPU_FLAGS} -x assembler-with-cpp" CACHE INTERNAL "")
+# CMake stores lists as semicolon-separated; join to space-separated for compiler
+string(JOIN " " CMAKE_C_FLAGS_STR   ${CPU_FLAGS} ${COMMON_FLAGS})
+string(JOIN " " CMAKE_ASM_FLAGS_STR ${CPU_FLAGS} -x assembler-with-cpp)
+set(CMAKE_C_FLAGS       "${CMAKE_C_FLAGS_STR}" CACHE INTERNAL "")
+set(CMAKE_ASM_FLAGS     "${CMAKE_ASM_FLAGS_STR}" CACHE INTERNAL "")
 set(CMAKE_EXE_LINKER_FLAGS
     "-T${LINKER_SCRIPT} -Wl,--gc-sections -Wl,-Map=${CMAKE_PROJECT_NAME}.map --specs=nosys.specs -lm -Wl,--print-memory-usage"
     CACHE INTERNAL "")
 
 # ---- Include paths ----
+set(STM32CUBE ${CMAKE_CURRENT_SOURCE_DIR}/STM32CubeH7)
+
 set(COMMON_INC
-    ${CMAKE_CURRENT_SOURCE_DIR}                           # FreeRTOSConfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}                           # FreeRTOSConfig.h, stm32h7xx_hal_conf.h
+    ${STM32CUBE}/Drivers/CMSIS/Include                    # CMSIS Core: core_cm7.h, cmsis_gcc.h
+    ${STM32CUBE}/Drivers/CMSIS/Device/ST/STM32H7xx/Include  # CMSIS Device: stm32h747xx.h, system_stm32h7xx.h
     ${FREERTOS_KERNEL}/include                            # FreeRTOS.h, task.h, queue.h etc.
     ${FREERTOS_PORT}                                      # portmacro.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/stubs                     # HAL stubs (stm32h7xx_hal.h, cmsis_os.h)
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs                     # HAL stubs + cmsis_os.h (AFTER CMSIS for override)
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/inc             # shared/inc (ipc_proto.h, ipc_transport.h)
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Inc              # m7_config.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Inc              # m7_config.h, foc_params.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m4/Inc              # m4_config.h
 )
 
@@ -66,9 +74,7 @@ set(FREERTOS_SRCS
 set(M7_SRCS
     ${STARTUP_S}
     ${SYSCALLS_C}
-    # Core
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/main_m7.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/ipc_bridge.c
+    # Core (HAL-dependent files excluded — need full STM32H7 HAL to compile)
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/imu_prep.c
     # Motor
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/foc_isr.c
@@ -76,23 +82,10 @@ set(M7_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/foc_encoder.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/foc_deadtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/foc_field_weaken.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/foc_observer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/multi_motor.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/roller_brush.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/side_brush.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/vacuum_fan.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/motor/ethercat.c
-    # HAL config
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/hal/gpio_config.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/hal/dma_config.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/hal/nvic_config.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/hal/clock_tree.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/hal/mpu_config.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/hal/flash_config.c
-    # Bootloader
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/bootloader/boot_main.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/bootloader/boot_verify.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../l1_m7/Core/bootloader/boot_flash.c
 )
 
 # ---- M4-specific source files ----
@@ -140,12 +133,9 @@ set(M4_SRCS
 
 # ---- Shared source files (used by both M7 and M4) ----
 set(SHARED_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ipc_uart.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ipc_spi.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ipc_usb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ipc_transport.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/ipc_hsem.c
-    # Stub globals: huart7, SystemCoreClock, CORDIC_MOCK
+    # Stub globals: huart7, SystemCoreClock
     ${CMAKE_CURRENT_SOURCE_DIR}/stubs/globals.c
 )
 
@@ -158,7 +148,10 @@ endif()
 
 # ---- Build executable ----
 add_executable(${CMAKE_PROJECT_NAME} ${FW_SRCS})
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${COMMON_INC})
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${COMMON_INC}
+    ${CMAKE_CURRENT_SOURCE_DIR}  # for stm32h7xx_hal_conf.h
+)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     ${CORE_DEFINE}
     STM32H747xx

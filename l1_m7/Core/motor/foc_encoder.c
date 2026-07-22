@@ -145,13 +145,13 @@ void TIM3_IRQHandler(void)
         uint32_t cnt_at_z = TIM2->CNT;
 
         /* Debounce */
-        henc.z_debounce++;
-        if (henc.z_debounce >= INDEX_DEBOUNCE_SAMPLES) {
+        henc.index_debounce++;
+        if (henc.index_debounce >= INDEX_DEBOUNCE_SAMPLES) {
             henc.count_at_z      = (int32_t)cnt_at_z;
             henc.index_triggered = 1U;
             henc.z_capture_count++;
             henc.z_event_ms = HAL_GetTick();
-            henc.z_debounce = 0U;
+            henc.index_debounce = 0U;
             /* Adjust position offset: we know where index should be */
             henc.index_offset = (int32_t)cnt_at_z;
         }
